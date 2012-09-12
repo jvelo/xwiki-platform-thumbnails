@@ -36,6 +36,8 @@ import javax.imageio.ImageWriter;
 import javax.imageio.plugins.jpeg.JPEGImageWriteParam;
 import javax.imageio.stream.ImageOutputStream;
 
+import org.xwiki.component.annotation.Component;
+
 import com.mortennobel.imagescaling.ResampleOp;
 import com.xpn.xwiki.plugin.image.ImageProcessor;
 
@@ -44,6 +46,7 @@ import com.xpn.xwiki.plugin.image.ImageProcessor;
  * 
  * @version $Id$
  */
+@Component
 public class JavaImageScalingImageProcessor implements ImageProcessor
 {
 
