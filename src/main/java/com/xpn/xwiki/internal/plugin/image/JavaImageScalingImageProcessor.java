@@ -19,10 +19,8 @@
  */
 package com.xpn.xwiki.internal.plugin.image;
 
-import java.awt.Graphics2D;
 import java.awt.Image;
 import java.awt.Rectangle;
-import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.awt.image.RenderedImage;
 import java.io.IOException;
@@ -38,34 +36,24 @@ import javax.imageio.ImageWriter;
 import javax.imageio.plugins.jpeg.JPEGImageWriteParam;
 import javax.imageio.stream.ImageOutputStream;
 
-import org.xwiki.component.annotation.Component;
-
+import com.mortennobel.imagescaling.ResampleOp;
 import com.xpn.xwiki.plugin.image.ImageProcessor;
 
 /**
- * Default {@link ImageProcessor} implementation.
+ * Image processor based on java-image-scaling.
  * 
- * @version $Id: 7aa0b241e4b76b9ae92781b35360c0ad99e8023a $
- * @since 2.5M2
+ * @version $Id$
  */
-@Component
-public class DefaultImageProcessor implements ImageProcessor
+public class JavaImageScalingImageProcessor implements ImageProcessor
 {
-    /**
-     * {@inheritDoc}
-     * 
-     * @see ImageProcessor#readImage(InputStream)
-     */
+
+    @Override
     public Image readImage(InputStream inputStream) throws IOException
     {
         return ImageIO.read(inputStream);
     }
 
-    /**
-     * {@inheritDoc}
-     * 
-     * @see ImageProcessor#writeImage(RenderedImage, String, float, OutputStream)
-     */
+    @Override
     public void writeImage(RenderedImage image, String mimeType, float quality, OutputStream out) throws IOException
     {
         if ("image/jpeg".equals(mimeType)) {
@@ -95,21 +83,15 @@ public class DefaultImageProcessor implements ImageProcessor
         }
     }
 
-    /**
-     * {@inheritDoc}
-     * 
-     * @see ImageProcessor#scaleImage(Image, int, int)
-     */
+    @Override
     public RenderedImage scaleImage(Image image, int width, int height)
     {
-        return this.createThumbnail(image, width, height, null);
+        ResampleOp resampleOp = new ResampleOp(width, height);
+        BufferedImage newImage = resampleOp.filter((BufferedImage) image, null);
+        return (RenderedImage) newImage;
     }
-    
-    /**
-     * {@inheritDoc}
-     * 
-     * @see ImageProcessor#createThumbnail(Image, int, int, Rectangle)
-     */
+
+    @Override
     public RenderedImage createThumbnail(Image image, int width, int height, Rectangle boundaries)
     {
         int imageType = BufferedImage.TYPE_4BYTE_ABGR;
@@ -122,30 +104,24 @@ public class DefaultImageProcessor implements ImageProcessor
                 imageType = BufferedImage.TYPE_4BYTE_ABGR;
             }
         }
-        BufferedImage bufferedImage = new BufferedImage(width, height, imageType);
-        Graphics2D graphics2D = bufferedImage.createGraphics();
-        graphics2D.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-        // We should test the return code here because an exception can be throw but caught.
-        if (boundaries == null) {
-            if (!graphics2D.drawImage(image, 0, 0, width, height, null)) {
-                // Conversion failed.
-                throw new RuntimeException("Failed to resize image.");
-            }
-        } else {
-            if (!graphics2D.drawImage(image, 0, 0, width, height, boundaries.x, boundaries.y, boundaries.x
-                + boundaries.width, boundaries.y + boundaries.height, null)) {
-                // Conversion failed.
-                throw new RuntimeException("Failed to crop and resize image.");
-            }
+        else {
+            throw new UnsupportedOperationException();
         }
-        return bufferedImage;
+        BufferedImage original = (BufferedImage) image;
+
+        if (boundaries != null) {
+            original =
+                original.getSubimage(new Double(boundaries.getX()).intValue(),
+                    new Double(boundaries.getY()).intValue(), new Double(boundaries.getWidth()).intValue(), new Double(
+                        boundaries.getHeight()).intValue());
+        }
+
+        ResampleOp resampleOp = new ResampleOp(width, height);
+        BufferedImage newImage = resampleOp.filter(original, null);
+        return (RenderedImage) newImage;
     }
 
-    /**
-     * {@inheritDoc}
-     * 
-     * @see ImageProcessor#isMimeTypeSupported(String)
-     */
+    @Override
     public boolean isMimeTypeSupported(String mimeType)
     {
         try {
@@ -155,5 +131,5 @@ public class DefaultImageProcessor implements ImageProcessor
             return false;
         }
     }
-    
+
 }

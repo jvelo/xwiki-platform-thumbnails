@@ -1,3 +1,4 @@
 org.xwiki.thumbnails.internal.ThumbnailsScriptService
 org.xwiki.thumbnails.internal.DefaultThumbnailURLProvider
 org.xwiki.thumbnails.internal.DefaultThumbnailsConfiguration
+500:com.xpn.xwiki.internal.plugin.image.JavaImageScalingImageProcessor

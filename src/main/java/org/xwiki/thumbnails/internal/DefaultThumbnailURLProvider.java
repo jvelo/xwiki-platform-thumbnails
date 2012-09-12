@@ -29,6 +29,7 @@ import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Singleton;
 
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.xwiki.bridge.DocumentAccessBridge;
 import org.xwiki.bridge.DocumentModelBridge;
@@ -74,20 +75,20 @@ public class DefaultThumbnailURLProvider implements ThumbnailURLProvider, Initia
      */
     @Inject
     private CacheManager cacheManager;
-    
+
     /**
      * That guy with the chain-saw.
      */
     @Inject
     private Logger logger;
-    
+
     /**
      * Serializer used to generate cache key from entity references.
      */
     @Inject
     @Named("default")
     private EntityReferenceSerializer serializer;
-    
+
     /**
      * Document access bridge used to interact with the XWiki data model.
      */
@@ -99,28 +100,25 @@ public class DefaultThumbnailURLProvider implements ThumbnailURLProvider, Initia
      */
     @Inject
     private ThumbnailsConfiguration thumbnailsConfiguration;
-    
+
     /**
      * Observation manager, used to add the listener that will flush cache entries when document update occurs.
      */
     @Inject
     private ObservationManager observationManager;
-    
+
     /**
-     * Cache for documents that holds a property pointing to an image.
-     * 
-     * Cached values are grouped by document, in order to ease entry flushing.
+     * Cache for documents that holds a property pointing to an image. Cached values are grouped by document, in order
+     * to ease entry flushing.
      */
     private Cache<Map<String, String>> thumbnailURLCache;
-    
+
     /**
-     * Cache for properties value pointing to an image
-     * 
-     * Cached values are grouped by document, in order to ease entry flushing.
+     * Cache for properties value pointing to an image Cached values are grouped by document, in order to ease entry
+     * flushing.
      */
     private Cache<Map<String, String>> propertiesValueCache;
-    
-    
+
     /**
      * {@inheritDoc}
      * 
@@ -142,7 +140,7 @@ public class DefaultThumbnailURLProvider implements ThumbnailURLProvider, Initia
         if (reference == null) {
             throw new NoSuchImageException();
         }
-        
+
         DocumentReference documentReference = (DocumentReference) reference.extractReference(EntityType.DOCUMENT);
         String serializedDocumentReference = (String) this.serializer.serialize(documentReference);
         String serializedReference = (String) this.serializer.serialize(reference);
@@ -154,15 +152,34 @@ public class DefaultThumbnailURLProvider implements ThumbnailURLProvider, Initia
         } else {
             // Cache does not contain this property : we retrieve it and add it to the cache
             imageName = (String) this.documentAccessBridge.getProperty(reference);
-            synchronized (this.propertiesValueCache) {
-                if (this.getPropertiesValueCache().get(serializedDocumentReference) == null) {
-                    this.getPropertiesValueCache().set(serializedDocumentReference, new HashMap<String, String>());
+            if (!StringUtils.isBlank(imageName)) {
+                synchronized (this.propertiesValueCache) {
+                    if (this.getPropertiesValueCache().get(serializedDocumentReference) == null) {
+                        this.getPropertiesValueCache().set(serializedDocumentReference, new HashMap<String, String>());
+                    }
+
+                    this.getPropertiesValueCache().get(serializedDocumentReference).put(serializedReference, imageName);
                 }
-                this.getPropertiesValueCache().get(serializedDocumentReference).put(serializedReference, imageName);
             }
         }
 
+        if (StringUtils.isBlank(imageName)) {
+            throw new NoSuchImageException();
+        }
         AttachmentReference ref = new AttachmentReference(imageName, documentReference);
+
+        boolean exists = true;
+        try {
+            // Checks the attachments actually exists
+            if (this.documentAccessBridge.getAttachmentVersion(ref) == null) {
+                exists = false;
+            }
+        } catch (Exception e) {
+        }
+
+        if (!exists) {
+            throw new NoSuchImageException("Image referenced in object does not exists as attachment");
+        }
 
         return this.getURL(ref, extraParameters);
     }
@@ -182,7 +199,7 @@ public class DefaultThumbnailURLProvider implements ThumbnailURLProvider, Initia
         return ((Integer) this.documentAccessBridge.getProperty(docRef, classRef, objectNumber, parameterName))
             .toString();
     }
-    
+
     /**
      * Appends parameters to an existing URL.
      * 
@@ -241,21 +258,21 @@ public class DefaultThumbnailURLProvider implements ThumbnailURLProvider, Initia
 
         Map<String, String> attachmentDocumentCacheEntries =
             this.getThumbnailURLCache().get((String) this.serializer.serialize(documentReference));
-        
+
         if (attachmentDocumentCacheEntries == null || !attachmentDocumentCacheEntries.containsKey(reference)) {
             try {
                 if (attachmentDocumentCacheEntries == null) {
                     attachmentDocumentCacheEntries = new HashMap<String, String>();
                 }
                 String imageName = reference.getName();
-                
+
                 if (imageName == null) {
                     throw new NoSuchImageException();
                 }
-                
+
                 this.getThumbnailURLCache().set((String) this.serializer.serialize(documentReference),
                     this.fillCacheEntry(documentReference, attachmentDocumentCacheEntries, imageName));
-                
+
             } catch (ClassCastException e) {
                 // The reference is not valid, or the property is not a string
                 throw new NoSuchImageException();
@@ -265,7 +282,6 @@ public class DefaultThumbnailURLProvider implements ThumbnailURLProvider, Initia
             this.getThumbnailURLCache().get((String) this.serializer.serialize(documentReference))
                 .get(reference.getName()), extraParameters);
     }
-
 
     /**
      * Helper method to fill a cache entry with a pair imageName/URL.
@@ -297,7 +313,7 @@ public class DefaultThumbnailURLProvider implements ThumbnailURLProvider, Initia
         result.put(imageName, url);
         return result;
     }
-    
+
     /**
      * Get (and lazily initializes if needed) the cache of property values.
      * 
@@ -320,12 +336,12 @@ public class DefaultThumbnailURLProvider implements ThumbnailURLProvider, Initia
             } catch (CacheException e) {
                 this.logger.error("Error initializing the property document cache.", e);
             }
-            
+
             this.getPropertiesValueCache();
         }
         return propertiesValueCache;
     }
-    
+
     /**
      * Get (and lazily initializes if needed) the cache of thumbnails URLs.
      * 
@@ -352,16 +368,16 @@ public class DefaultThumbnailURLProvider implements ThumbnailURLProvider, Initia
         }
         return this.thumbnailURLCache;
     }
-    
+
     /**
      * {@inheritDoc}
      */
     public void initialize() throws InitializationException
     {
         this.observationManager.addListener(new UpdateCachesEventListener());
-        
+
     }
-    
+
     /**
      * Event listener that flush cache entries when document update occurs.
      */
