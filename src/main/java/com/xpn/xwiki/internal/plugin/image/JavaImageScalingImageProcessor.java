@@ -22,6 +22,7 @@ package com.xpn.xwiki.internal.plugin.image;
 import java.awt.Image;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
+import java.awt.image.RasterFormatException;
 import java.awt.image.RenderedImage;
 import java.io.IOException;
 import java.io.InputStream;
@@ -113,10 +114,14 @@ public class JavaImageScalingImageProcessor implements ImageProcessor
         BufferedImage original = (BufferedImage) image;
 
         if (boundaries != null) {
-            original =
-                original.getSubimage(new Double(boundaries.getX()).intValue(),
-                    new Double(boundaries.getY()).intValue(), new Double(boundaries.getWidth()).intValue(), new Double(
-                        boundaries.getHeight()).intValue());
+            try {
+                original =
+                    original.getSubimage(new Double(boundaries.getX()).intValue(),
+                        new Double(boundaries.getY()).intValue(), new Double(boundaries.getWidth()).intValue(),
+                        new Double(boundaries.getHeight()).intValue());
+            } catch (RasterFormatException e) {
+                // Nevermind, we will use the original image, not cropped
+            }
         }
 
         ResampleOp resampleOp = new ResampleOp(width, height);
